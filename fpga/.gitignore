@@ -1,0 +1,13 @@
+*-project/
+.Xil/
+NA/
+sources/system/ip/
+sources/system/ipshared/
+sources/system/ui
+vivado*
+sources/ip/**/doc/
+sources/ip/**/hdl/
+sources/ip/**/sim/
+sources/ip/**/synth/
+sources/ip/**/*.veo
+sources/ip/**/*.vho
