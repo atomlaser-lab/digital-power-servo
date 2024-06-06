@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 
   uint32_t i, incr = 0;
   uint8_t saveType = 2;
-  int saveFactor = 4;
+  int saveFactor = 2;
   uint32_t tmp;
   uint32_t *data;
   uint8_t debugFlag = 0;

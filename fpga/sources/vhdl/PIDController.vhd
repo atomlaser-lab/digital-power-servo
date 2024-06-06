@@ -35,19 +35,19 @@ end PIDController;
 
 architecture Behavioral of PIDController is
 
-COMPONENT PID_Multipliers
+COMPONENT PID_Multiplier
   PORT (
     CLK : IN STD_LOGIC;
     A : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
-    B : IN STD_LOGIC_VECTOR(27 DOWNTO 0);
-    P : OUT STD_LOGIC_VECTOR(35 DOWNTO 0)
+    B : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+    P : OUT STD_LOGIC_VECTOR(23 DOWNTO 0)
   );
 END COMPONENT;
 --
 -- Constants
 --
 constant MULT_LATENCY   :   natural :=  3;
-constant EXP_WIDTH      :   natural :=  28;
+constant EXP_WIDTH      :   natural :=  16;
 constant GAIN_WIDTH     :   natural :=  8;
 constant MULT_WIDTH     :   natural :=  EXP_WIDTH + GAIN_WIDTH;
 --
@@ -94,7 +94,7 @@ prop_i <= err(0) - err(1);
 int_i <= shift_right(err(0) + err(1),1);
 deriv_i <= err(0) - shift_left(err(1),1) + err(2);
 
-PropMult: PID_Multipliers
+PropMult: PID_Multiplier
 port map(
     clk     =>  clk,
     A       =>  Kp,
@@ -102,7 +102,7 @@ port map(
     P       =>  prop_o
 );
 
-IntMult: PID_Multipliers
+IntMult: PID_Multiplier
 port map(
     clk     =>  clk,
     A       =>  Ki,
@@ -110,7 +110,7 @@ port map(
     P       =>  int_o
 );
 
-DerivMult: PID_Multipliers
+DerivMult: PID_Multiplier
 port map(
     clk     =>  clk,
     A       =>  Kd,

@@ -221,7 +221,9 @@ begin
 --
 -- DAC Outputs - set these to zero for now
 --
-dac_o <= (others => (others => '0'));
+--dac_o <= (others => (others => '0'));
+dac_o(0) <= signed(std_logic_vector(resize(pwm_data_i(0),t_dac'length)));
+dac_o(1) <= signed(std_logic_vector(resize(pwm_data_i(1),t_dac'length)));
 m_axis_tdata <= std_logic_vector(dac_o(1)) & std_logic_vector(dac_o(0));
 m_axis_tvalid <= '1';
 --
@@ -254,8 +256,8 @@ led_o <= outputReg(15 downto 8);
 --
 -- Modulator/demodulator component
 --
-adc(0) <= resize(signed(adcData_i(15 downto 0)));
-adc(1) <= resize(signed(adcData_i(31 downto 16)));- 
+adc(0) <= resize(signed(adcData_i(15 downto 0)),t_adc'length);
+adc(1) <= resize(signed(adcData_i(31 downto 16)),t_adc'length);
 
 Main_Filter: DecimatingFilter
 generic map(
@@ -273,18 +275,10 @@ port map(
 --
 -- Apply feedback
 --
--- Top-level parameters
-pid_enable <= pid_regs(0)(1 downto 0);
-pid_polarity <= pid_regs(0)(3 downto 2);
---
--- Control signals
---
-pid_control(0) <= resize(signed(pid_regs(0)(31 downto 16)),t_meas'length);
-pid_control(1) <= resize(signed(pid_regs(1)(15 downto 0)),t_meas'length);
---
--- Control modules
---
 GEN_PID: for I in 0 to NUM_PIDS - 1 generate
+    pid_enable(I) <= pid_regs(I)(0);
+    pid_polarity(I) <= pid_regs(I)(1);
+    pid_control(I) <= resize(signed(pid_regs(I)(31 downto 16)),t_meas'length);
     Controller: PIDController
     port map(
         clk         =>  adcClk,
@@ -316,8 +310,8 @@ PWM_LIMIT_GEN: for I in 0 to NUM_PIDS - 1 generate
                     pwm_min(I) when pwm_sum(I) <= pwm_min(I);
 
 end generate PWM_LIMIT_GEN;
-pwm_limit(2) <= (others => '0');
-pwm_limit(3) <= (others => '0');
+--pwm_limit(2) <= (others => '0');
+--pwm_limit(3) <= (others => '0');
 
 --
 -- Collect demodulated data at lower sampling rate in FIFO buffers
@@ -328,7 +322,7 @@ fifoReset <= fifoReg(1);
 fifo_route <= topReg(1 downto 0);
 FIFO_GEN: for I in 0 to NUM_FIFOS - 1 generate
     fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH));
-    fifoValid(I) <= ((filter_valid(I) and (not(fifo_route(I)) or not(enable))) or (control_valid and fifo_route(I) and enable)) and enableFIFO;
+    fifoValid(I) <= ((filter_valid(I) and (not(fifo_route(I)) or not(pid_enable(I)))) or (pid_valid(I) and fifo_route(I) and pid_enable(I))) and enableFIFO;
     PhaseMeas_FIFO_NORMAL_X: FIFOHandler
     port map(
         wr_clk      =>  adcClk,
@@ -451,8 +445,6 @@ begin
                             when X"000084" => rw(bus_m,bus_s,comState,fifoReg);
                             when X"000088" => fifoRead(bus_m,bus_s,comState,fifo_bus(0).m,fifo_bus(0).s);
                             when X"00008C" => fifoRead(bus_m,bus_s,comState,fifo_bus(1).m,fifo_bus(1).s);
-                            when X"000090" => fifoRead(bus_m,bus_s,comState,fifo_bus(2).m,fifo_bus(2).s);
-                            when X"000094" => fifoRead(bus_m,bus_s,comState,fifo_bus(3).m,fifo_bus(3).s);
                             --
                             -- Memory signals
                             --

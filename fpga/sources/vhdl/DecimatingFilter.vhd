@@ -27,27 +27,28 @@ end DecimatingFilter;
 
 architecture Behavioral of DecimatingFilter is
 
-COMPONENT CICfilter
-PORT (
+COMPONENT CICFilter
+  PORT (
     aclk : IN STD_LOGIC;
     aresetn : IN STD_LOGIC;
     s_axis_config_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     s_axis_config_tvalid : IN STD_LOGIC;
     s_axis_config_tready : OUT STD_LOGIC;
-    s_axis_data_tdata : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
+    s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     s_axis_data_tvalid : IN STD_LOGIC;
     s_axis_data_tready : OUT STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(63 DOWNTO 0);
+    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(55 DOWNTO 0);
     m_axis_data_tvalid : OUT STD_LOGIC 
-);
+  );
 END COMPONENT;
 
 --
 -- CIC filter outputs
 --
-constant CIC_OUTPUT_WIDTH   :   natural :=  64;
+constant CIC_OUTPUT_WIDTH   :   natural :=  56;
+constant CIC_ACTUAL_WIDTH   :   natural :=  53;
 type t_cic_o_array is array(natural range <>) of std_logic_vector(CIC_OUTPUT_WIDTH - 1 downto 0);
-type t_filter_data_i is array(natural range <>) of std_logic_vector(ADC_WIDTH - 1 downto 0);
+type t_filter_data_i is array(natural range <>) of std_logic_vector(15 downto 0);
 
 --
 -- Filter signals
@@ -94,7 +95,7 @@ end process;
 -- Procedurally generate all CIC filters
 --
 FILT_GEN: for I in 0 to NUM_INPUT_SIGNALS - 1 generate
-    filter_data_i(I) <= std_logic_vector(data_i(I));
+    filter_data_i(I)(ADC_WIDTH - 1 downto 0) <= std_logic_vector(data_i(I));
     Filt_X : CICfilter
     PORT MAP (
         aclk                        => clk,
@@ -108,7 +109,7 @@ FILT_GEN: for I in 0 to NUM_INPUT_SIGNALS - 1 generate
         m_axis_data_tdata           => filter_o(I),
         m_axis_data_tvalid          => valid_filter_o(I)
     );
-    filtered_data_o(I) <= resize(shift_right(signed(filter_o(I)),cicShift + to_integer(setShift)),t_meas'length);
+    filtered_data_o(I) <= resize(shift_right(signed(filter_o(I)(CIC_ACTUAL_WIDTH - 1 downto 0)),cicShift + to_integer(setShift)),t_meas'length);
 end generate FILT_GEN;
 
 valid_o <= valid_filter_o;

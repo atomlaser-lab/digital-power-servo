@@ -31,10 +31,10 @@ int stop_fifo(void *cfg) {
   return 0;
 }
 
-int write_to_pwm(void *cfg,uint16_t V1,uint16_t V2,uint16_t V3) {
+int write_to_pwm(void *cfg,uint16_t V1,uint16_t V2) {
   *((uint32_t *)(cfg + PWM_LOC)) = (uint32_t) V1;
   *((uint32_t *)(cfg + PWM_LOC + 4)) = (uint32_t) V2;
-  *((uint32_t *)(cfg + PWM_LOC + 8)) = (uint32_t) V3;
+//   *((uint32_t *)(cfg + PWM_LOC + 8)) = (uint32_t) V3;
   return 0;
 }
  
@@ -46,13 +46,13 @@ int main(int argc, char **argv)
   char *name = "/dev/mem";	//Name of the memory resource
   uint16_t Vx = 320;
   uint16_t Vy = 320;
-  uint16_t Vz = 320;
+//   uint16_t Vz = 320;
   uint16_t Vjump = 64;
   uint8_t jump_index = 0;
 
   uint32_t i, incr = 0;
   uint8_t saveType = 2;
-  uint32_t saveFactor = 4;
+  uint32_t saveFactor = 2;
   uint8_t allow_jump = 1;
   uint32_t tmp;
   uint32_t *data;
@@ -65,7 +65,7 @@ int main(int argc, char **argv)
    * Parse the input arguments
    */
   int c;
-  while ((c = getopt(argc,argv,"s:j:n:x:y:z:i:f")) != -1) {
+  while ((c = getopt(argc,argv,"s:j:n:x:y:i:f")) != -1) {
     switch (c) {
         case 's':
             saveFactor = atoi(optarg);
@@ -84,9 +84,6 @@ int main(int argc, char **argv)
             break;
         case 'y':
             Vy = atoi(optarg);
-            break;
-        case 'z':
-            Vz = atoi(optarg);
             break;
         case 'f':
             debugFlag = 1;
@@ -125,7 +122,7 @@ int main(int argc, char **argv)
   cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,MEM_LOC);
  
   // Set voltages
-  write_to_pwm(cfg,Vx,Vy,Vz);
+  write_to_pwm(cfg,Vx,Vy);
   sleep(1);
   // Record data
   start_fifo(cfg);
@@ -134,13 +131,10 @@ int main(int argc, char **argv)
         allow_jump = 0;
         switch (jump_index) {
             case 1:
-                write_to_pwm(cfg,Vx + Vjump,Vy,Vz);
+                write_to_pwm(cfg,Vx + Vjump,Vy);
                 break;
             case 2:
-                write_to_pwm(cfg,Vx,Vy + Vjump,Vz);
-                break;
-            case 3:
-                write_to_pwm(cfg,Vx,Vy,Vz + Vjump);
+                write_to_pwm(cfg,Vx,Vy + Vjump);
                 break;
             default:
                 break;
@@ -152,7 +146,7 @@ int main(int argc, char **argv)
     }
   }
   stop_fifo(cfg);
-  write_to_pwm(cfg,Vx,Vy,Vz);
+  write_to_pwm(cfg,Vx,Vy);
 
   ptr = fopen("SavedData.bin","wb");
   fwrite(data,4,(size_t)(data_size),ptr);

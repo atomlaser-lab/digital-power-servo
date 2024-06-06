@@ -27,7 +27,7 @@ end SaveADCData;
 
 architecture Behavioral of SaveADCData is
 
-COMPONENT BlockMem_Fast
+COMPONENT BlockMem
   PORT (
     clka : IN STD_LOGIC;
     wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
@@ -73,7 +73,7 @@ signal_sync(writeClk,aresetn,trig_i,trigSync);
 -- Instantiate the block memory
 --
 maxAddr <= (maxAddr'range => '1');
-BlockMem_inst : BlockMem_Fast
+BlockMem_inst : BlockMem
 PORT MAP (
     clka => writeClk,
     wea => wea,

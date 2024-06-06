@@ -106,25 +106,20 @@ signal bus_s                    :   t_axi_bus_slave;
 -- AXI data
 --
 
-constant axi_addresses   :   t_axi_addr_array(5 downto 0)  :=   (0  =>  X"00000000",
-                                                                 1  =>  X"00000004",
-                                                                 2  =>  X"00000008",
-                                                                 3  =>  X"00000014",
-                                                                 4  =>  X"00000018",
-                                                                 5  =>  X"00000020");
+constant axi_addresses   :   t_axi_addr_array(5 downto 0)  :=   (0  =>  X"0000000C",
+                                                                 1  =>  X"00000100",
+                                                                 2  =>  X"00000104",
+                                                                 3  =>  X"00000108",
+                                                                 4  =>  X"0000010C",
+                                                                 5  =>  X"00000200",
+                                                                 6  =>  X"00000204",
+                                                                 7  =>  X"00000210",
+                                                                 8  =>  X"00000214");
                                                      
 
 signal axi_data :   t_axi_data_array(axi_addresses'length - 1 downto 0);          
 
 signal triggers, outputReg, filterReg          :   t_param_reg;
-signal dds_phase_inc_reg            :   t_param_reg;
-signal dds_phase_off_reg            :   t_param_reg;
--- DDS2
-signal dds2_phase_inc_reg            :   t_param_reg; -- added this
-signal dds2_phase_off_reg            :   t_param_reg; -- added this
--- DDS3
-signal dds3_phase_inc_reg            :   t_param_reg; -- added this
-signal dds3_phase_off_reg            :   t_param_reg; -- added this
 
 --
 -- AXI control signals
@@ -134,10 +129,10 @@ signal axi_addr_single  :   t_axi_addr;
 signal axi_data_single  :   t_axi_data;
 signal start_single_i   :   std_logic_vector(1 downto 0);
 
-signal dds1_o, dds2_o             : std_logic_vector(31 downto 0);
-signal dds_phase_i, dds2_phase_i  :   std_logic_vector(63 downto 0);
-signal dds_phase_off_test   :   unsigned(31 downto 0);
-signal dds2_phase_off_test   :   unsigned(31 downto 0);
+signal pidRegs  :   t_param_reg_array(1 downto 0);
+signal pidGainRegs  :   t_param_reg_array(1 downto 0);
+signal pwmRegs  :   t_param_reg_array(1 downto 0);
+signal pwmLimitRegs :   t_param_reg_array(1 downto 0);
 
 signal adc_data :   signed(15 downto 0);
 
@@ -194,28 +189,6 @@ port map(
     bus_s           =>  bus_s
 );
 
-DDS_inst : DDS1
-  PORT MAP (
-    aclk                     => adcClk,
-    aresetn                  => aresetn,
-    s_axis_phase_tvalid      => '1',
-    s_axis_phase_tdata       => dds_phase_i,
-    m_axis_data_tvalid       => open,
-    m_axis_data_tdata        => dds1_o
-);
-
-DDS2_inst : DDS1
-  PORT MAP (
-    aclk                     => adcClk,
-    aresetn                  => aresetn,
-    s_axis_phase_tvalid      => '1',
-    s_axis_phase_tdata       => dds2_phase_i,
-    m_axis_data_tvalid       => open,
-    m_axis_data_tdata        => dds2_o
-);
-
-dds_phase_i <= std_logic_vector(dds_phase_off_test) & dds_phase_inc_reg;
-dds2_phase_i <= std_logic_vector(dds2_phase_off_test) & std_logic_vector(shift_left(unsigned(dds_phase_inc_reg),1));
 
 addr_i <= bus_m.addr;
 writeData_i <= bus_m.data;
@@ -226,18 +199,19 @@ bus_s.resp <= resp_o;
 --
 -- Assign AXI registers
 --
-axi_data <= (0  =>  triggers,
-             1  =>  outputReg,
-             2  =>  filterReg,
-             3  =>  dds_phase_inc_reg, -- added this
-             4  =>  dds_phase_off_reg, -- added this
-             5  =>  dds2_phase_off_reg
-            -- 6  =>  dds3_phase_inc_reg, -- added this
-            -- 7  =>  dds3_phase_off_reg  -- added this
+axi_data <= (0  =>  filterReg,
+             1  =>  pidRegs(0),
+             2  =>  pidRegs(1),
+             3  =>  pidGainRegs(0),
+             4  =>  pidGainRegs(1),
+             5  =>  pwmRegs(0),
+             6  =>  pwmRegs(1),
+             7  =>  pwmLimitRegs(0),
+             8  =>  pwmLimitRegs(1)
              );
              
-adc_data <= resize(signed(dds1_o(9 downto 0)),16) + resize(signed(dds2_o(25 downto 16)),16);
-adcData_i <= X"0000" & std_logic_vector(adc_data);
+--adc_data <= signed(m_axis_tdata(15 downto 0));
+adcData_i <= m_axis_tdata;
 --adcData_i <= m_axis_tdata;
 
 
@@ -253,18 +227,15 @@ begin
     ext_i <= (others => '0');
     triggers <= (others => '0');
     outputReg <= (others => '0');
-    dds_phase_inc_reg <= std_logic_vector(to_unsigned(171798692,32));
-    dds_phase_off_reg <= (others => '0');
-    dds2_phase_off_reg <= (others => '0');
-    filterReg <= X"00" & X"ff" & X"00" & X"09";
-
-    dds_phase_off_test <= to_unsigned(0,dds_phase_off_test'length);
-    dds2_phase_off_test <= to_unsigned(0,dds2_phase_off_test'length);
-    
-   --dds2_phase_inc_reg <= std_logic_vector(to_unsigned(34359738,32)); -- added this
-   -- dds2_phase_off_reg <= (others => '0'); -- added this
-   -- dds3_phase_inc_reg <= std_logic_vector(to_unsigned(34359738,32)); -- added this
-   -- dds3_phase_off_reg <= (others => '0'); -- added this
+    filterReg <= X"00" & X"00" & X"00" & X"08";
+    pidRegs(0) <= std_logic_vector(to_signed(1000,16)) & X"0001";
+    pidRegs(1) <= X"0000" & std_logic_vector(to_signed(500,16));
+    pidGainRegs(0) <= X"04000101";
+    pidGainRegs(1) <= X"04000101";
+    pwmRegs(0) <= std_logic_vector(to_signed(0,32));
+    pwmRegs(1) <= std_logic_vector(to_signed(0,32));
+    pwmLimitRegs(0) <= std_logic_vector(to_unsigned(1000,16)) & std_logic_vector(to_unsigned(0,16));
+    pwmLimitRegs(1) <= std_logic_vector(to_unsigned(1000,16)) & std_logic_vector(to_unsigned(0,16));
     
     axi_addr_single <= (others => '0');
     axi_data_single <= (others => '0');
@@ -284,8 +255,8 @@ begin
     -- Change filter rate
     --
     wait until rising_edge(sysclk);
-    axi_addr_single <= X"0000_0008";
-    axi_data_single <= X"0000000a";
+    axi_addr_single <= X"0000_0100";
+    axi_data_single <= X"00000003";
     start_single_i <= "01";
     wait until bus_s.resp(0) = '1';
     start_single_i <= "00";
