@@ -106,7 +106,7 @@ signal bus_s                    :   t_axi_bus_slave;
 -- AXI data
 --
 
-constant axi_addresses   :   t_axi_addr_array(5 downto 0)  :=   (0  =>  X"0000000C",
+constant axi_addresses   :   t_axi_addr_array(8 downto 0)  :=   (0  =>  X"0000000C",
                                                                  1  =>  X"00000100",
                                                                  2  =>  X"00000104",
                                                                  3  =>  X"00000108",
