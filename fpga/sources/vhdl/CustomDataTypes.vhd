@@ -45,6 +45,8 @@ type t_pwm_signed_array is array(natural range <>) of signed(PWM_DATA_WIDTH - 1 
 --
 constant NUM_PIDS           :   natural :=  2;
 constant PID_WIDTH          :   natural :=  8;
+subtype t_pid_output is signed(15 downto 0);
+type t_pid_output_array is array(natural range <>) of t_pid_output;
 --
 -- Defines filter related types
 --

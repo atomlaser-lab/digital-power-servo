@@ -165,17 +165,19 @@ signal fifoReg              :   t_param_reg;
 -- PID registers
 signal pid_regs             :   t_param_reg_array(1 downto 0);
 signal pid_gain_regs        :   t_param_reg_array(1 downto 0);
+-- DAC registers
+signal dac_regs             :   t_param_reg_array(1 downto 0);
+signal dac_limit_regs       :   t_param_reg_array(NUM_PIDS - 1 downto 0);
 --
--- DDS signals
+-- DAC signals
 --
 signal dac_o                :   t_dac_array(1 downto 0);
-signal filtered_data        :   t_meas_array(1 downto 0);
-signal filter_valid         :   std_logic_vector(1 downto 0);
 --
 -- ADC signals
 --
 signal adc                  :   t_adc_array(1 downto 0);
-
+signal filtered_data        :   t_meas_array(1 downto 0);
+signal filter_valid         :   std_logic_vector(1 downto 0);
 --
 -- FIFO signals
 --
@@ -188,6 +190,7 @@ signal fifo_bus             :   t_fifo_bus_array(NUM_FIFOS - 1 downto 0)  :=  (o
 signal enableFIFO           :   std_logic;
 signal fifoReset            :   std_logic;
 signal fifo_route           :   std_logic_vector(NUM_FIFOS - 1 downto 0);
+signal fifo_actuator        :   t_fifo_data_array(NUM_FIFOS - 1 downto 0);
 
 --
 -- Memory signals
@@ -205,7 +208,8 @@ signal pid_control              :   t_meas_array(NUM_PIDS - 1 downto 0);
 signal pid_enable               :   std_logic_vector(NUM_PIDS - 1 downto 0);
 signal pid_polarity             :   std_logic_vector(NUM_PIDS - 1 downto 0);
 signal pid_valid                :   std_logic_vector(NUM_PIDS - 1 downto 0);
-signal pid_output               :   t_pwm_exp_array(NUM_PIDS - 1 downto 0); 
+signal pid_output               :   t_pid_output_array(NUM_PIDS - 1 downto 0); 
+signal pid_output_switch        :   std_logic_vector(NUM_PIDS - 1 downto 0);
 --
 -- PWM signals
 --
@@ -215,15 +219,23 @@ signal pwm_data_exp             :   t_pwm_exp_array(NUM_PIDS - 1 downto 0);
 signal pwm_sum                  :   t_pwm_exp_array(NUM_PIDS - 1 downto 0);
 signal pwm_limit                :   t_pwm_exp_array(NUM_PIDS - 1 downto 0);
 signal pwm_max, pwm_min         :   t_pwm_exp_array(NUM_PIDS - 1 downto 0);
+--
+-- DAC signals
+--
+signal dac_data, dac_data_i     :   t_dac_array(1 downto 0);
+signal dac_sum, dac_limit       :   t_dac_array(1 downto 0);
+signal dac_max, dac_min         :   t_dac_array(1 downto 0);
 
 begin
 
 --
--- DAC Outputs - set these to zero for now
+-- DAC Outputs
 --
---dac_o <= (others => (others => '0'));
-dac_o(0) <= signed(std_logic_vector(resize(pwm_data_i(0),t_dac'length)));
-dac_o(1) <= signed(std_logic_vector(resize(pwm_data_i(1),t_dac'length)));
+DAC_Gen: for I in 0 to 1 generate
+    dac_data(I) <= signed(dac_regs(I)(t_dac'left downto 0));
+end generate DAC_Gen;
+dac_o(0) <= dac_limit(0);
+dac_o(1) <= dac_limit(1);
 m_axis_tdata <= std_logic_vector(dac_o(1)) & std_logic_vector(dac_o(0));
 m_axis_tvalid <= '1';
 --
@@ -275,6 +287,7 @@ port map(
 --
 -- Apply feedback
 --
+pid_output_switch <= topReg(3 downto 2);
 GEN_PID: for I in 0 to NUM_PIDS - 1 generate
     pid_enable(I) <= pid_regs(I)(0);
     pid_polarity(I) <= pid_regs(I)(1);
@@ -300,7 +313,8 @@ PWM_LIMIT_GEN: for I in 0 to NUM_PIDS - 1 generate
     -- Expand manual data to a signed 11 bit value
     pwm_data_exp(I) <= signed(std_logic_vector(resize(pwm_data(I),PWM_EXP_WIDTH)));
     -- Sum expanded manual data and control data
-    pwm_sum(I) <= pwm_data_exp(I) + resize(pid_output(I),PWM_EXP_WIDTH);
+    pwm_sum(I) <= pwm_data_exp(I) + resize(pid_output(I),PWM_EXP_WIDTH) when pid_output_switch(I) = '0' else
+                  pwm_data_exp(I);
     -- Parse limits, expand to 11 bits as signed values
     pwm_min(I) <= signed(resize(unsigned(pwm_limit_regs(I)(15 downto 0)),PWM_EXP_WIDTH));
     pwm_max(I) <= signed(resize(unsigned(pwm_limit_regs(I)(31 downto 16)),PWM_EXP_WIDTH));
@@ -310,8 +324,19 @@ PWM_LIMIT_GEN: for I in 0 to NUM_PIDS - 1 generate
                     pwm_min(I) when pwm_sum(I) <= pwm_min(I);
 
 end generate PWM_LIMIT_GEN;
---pwm_limit(2) <= (others => '0');
---pwm_limit(3) <= (others => '0');
+
+DAC_LIMIT_GEN: for I in 0 to NUM_PIDS - 1 generate
+    -- Sum manual data and control data
+    dac_sum(I) <= dac_data(I) + resize(pid_output(I),t_dac'length) when pid_output_switch(I) = '1' else
+                  dac_data(I);
+    -- Parse limits
+    dac_min(I) <= resize(signed(dac_limit_regs(I)(15 downto 0)),t_dac'length);
+    dac_max(I) <= resize(signed(dac_limit_regs(I)(31 downto 16)),t_dac'length);
+    -- Limit the summed manual data and control values to max/min limits
+    dac_limit(I) <= dac_sum(I) when dac_sum(I) < dac_max(I) and dac_sum(I) > dac_min(I) else
+                    dac_max(I) when dac_sum(I) >= dac_max(I) else
+                    dac_min(I) when dac_sum(I) <= dac_min(I);
+end generate DAC_LIMIT_GEN;
 
 --
 -- Collect demodulated data at lower sampling rate in FIFO buffers
@@ -321,7 +346,9 @@ enableFIFO <= fifoReg(0);
 fifoReset <= fifoReg(1);
 fifo_route <= topReg(1 downto 0);
 FIFO_GEN: for I in 0 to NUM_FIFOS - 1 generate
-    fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH));
+    fifoActuator(I) <= std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH)) when pid_output_switch(I) = '0' else
+                       std_logic_vector(resize(dac_limit(I),FIFO_WIDTH));
+    fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else fifoActuator(I);
     fifoValid(I) <= ((filter_valid(I) and (not(fifo_route(I)) or not(pid_enable(I)))) or (pid_valid(I) and fifo_route(I) and pid_enable(I))) and enableFIFO;
     PhaseMeas_FIFO_NORMAL_X: FIFOHandler
     port map(
@@ -376,6 +403,7 @@ begin
         outputReg <= (others => '0');
         filterReg <= X"0000000a";
         pwm_regs <= (others => (others => '0'));
+        dac_regs <= (others => (others => '0'));
         
         for I in 0 to pid_regs'length - 1 loop
             pid_regs(I) <= (others => '0');
@@ -387,6 +415,10 @@ begin
 
         for I in 0 to pwm_limit_regs'length - 1 loop
             pwm_limit_regs(I) <= (others => '0');
+        end loop;
+
+        for I in 0 to dac_limit_regs'length - 1 loop
+            dac_limit_regs(I) <= (others => '0');
         end loop;
         --
         -- FIFO registers
@@ -439,6 +471,13 @@ begin
                             when X"000204" => rw(bus_m,bus_s,comState,pwm_regs(1));
                             when X"000210" => rw(bus_m,bus_s,comState,pwm_limit_regs(0));
                             when X"000214" => rw(bus_m,bus_s,comState,pwm_limit_regs(1));
+                            -- 
+                            -- DAC registers
+                            --
+                            when X"000300" => rw(bus_m,bus_s,comState,dac_regs(0));
+                            when X"000304" => rw(bus_m,bus_s,comState,dac_regs(1));
+                            when X"000310" => rw(bus_m,bus_s,comState,dac_limit_regs(0));
+                            when X"000314" => rw(bus_m,bus_s,comState,dac_limit_regs(1));
                             --
                             -- FIFO control and data retrieval
                             --

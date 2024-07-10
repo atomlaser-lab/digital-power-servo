@@ -16,7 +16,13 @@ classdef PowerServoControl < handle
         cic_shift               %Log2(Additional digital gain after filter)
         numSamples              %Number of samples to collect from recording raw ADC signals
         pwm                     %Array of 2 PWM outputs
+        pwm_upper_limits        %Array of 2 PWM upper limits
+        pwm_lower_limits        %Array of 2 PWM lower limits
+        dac                     %Array of 2 DAC outputs
+        dac_upper_limits        %Array of 2 DAC upper limits
+        dac_lower_limits        %Array of 2 DAC lower limits
         pids                    %PID control
+        output_switch           %Switch controlling PID output: 0 (PWM), 1 (DAC)
         fifo_route              %Array of 2 FIFO routing options
     end
     
@@ -27,10 +33,12 @@ classdef PowerServoControl < handle
         filterReg               %Register for CIC filter control
         numSamplesReg           %Register for storing number of samples of ADC data to fetch
         pwmRegs                 %Registers for PWM signals
+        dacRegs                 %Registers for DAC signals
         auxReg                  %Auxiliary register
         pidControlRegs          %Registers for control
         pidGainRegs             %Registers for gain values
         pwmLimitRegs            %Registers for limiting PWM outputs
+        dacLimitRegs            %Registers for limiting DAC outputs
     end
     
     properties(Constant)
@@ -43,11 +51,13 @@ classdef PowerServoControl < handle
         NUM_PID = 2;
         NUM_PWM = 2;
         NUM_MEAS = 2;
+        NUM_DAC = 2;
         %
         % Conversion values going from integer values to volts
         %
         CONV_ADC_LV = 1.1851/2^(PowerServoControl.ADC_WIDTH - 1);
         CONV_ADC_HV = 29.3570/2^(PowerServoControl.ADC_WIDTH - 1);
+        CONV_DAC = 1/2^(PowerServoControl.DAC_WIDTH - 1);
         CONV_PWM = 1.6/(2^PowerServoControl.PWM_WIDTH - 1);
     end
     
@@ -64,7 +74,7 @@ classdef PowerServoControl < handle
             %   SELF = POWERSERVOCONTROL(HOST) creates an instance with socket
             %   server host address HOST
 
-            if numel(varargin)==1
+            if numel(varargin) == 1
                 self.conn = ConnectionClient(varargin{1});
             else
                 self.conn = ConnectionClient(self.DEFAULT_HOST);
@@ -84,6 +94,12 @@ classdef PowerServoControl < handle
             for nn = 1:self.NUM_PWM
                 self.pwmRegs(nn) = DeviceRegister(hex2dec('200') + (nn - 1)*4,self.conn);
                 self.pwmLimitRegs(nn,1) = DeviceRegister(hex2dec('210') + (nn - 1)*4,self.conn);
+            end
+            self.dacRegs = DeviceRegister.empty;
+            self.dacLimitRegs = DeviceRegister.empty;
+            for nn = 1:self.NUM_DAC
+                self.dacRegs(nn) = DeviceRegister(hex2dec('300') + (nn - 1)*4,self.conn);
+                self.dacLimitRegs(nn,1) = DeviceRegister(hex2dec('310') + (nn - 1)*4,self.conn);
             end
             self.numSamplesReg = DeviceRegister('100000',self.conn);
             %
@@ -111,10 +127,35 @@ classdef PowerServoControl < handle
             % PWM settings
             %
             self.pwm = DeviceParameter.empty;
+            self.pwm_upper_limits = DeviceParameter.empty;
+            self.pwm_lower_limits = DeviceParameter.empty;
             for nn = 1:self.NUM_PWM
                 self.pwm(nn) = DeviceParameter([0,self.PWM_WIDTH - 1],self.pwmRegs(nn))...
                     .setLimits('lower',0,'upper',1.62)...
                     .setFunctions('to',@(x) x/self.CONV_PWM,'from',@(x) x*self.CONV_PWM);
+                self.pwm_lower_limits(nn) = DeviceParameter([0,15],self.pwmLimitRegs(nn))...
+                    .setLimits('lower',0,'upper',1.62)...
+                    .setFunctions('to',@(x) x/self.CONV_PWM,'from',@(x) x*self.CONV_PWM);
+                self.pwm_upper_limits(nn) = DeviceParameter([16,31],self.pwmLimitRegs(nn))...
+                    .setLimits('lower',0,'upper',1.62)...
+                    .setFunctions('to',@(x) x/self.CONV_PWM,'from',@(x) x*self.CONV_PWM);
+            end
+            %
+            % DAC settings
+            %
+            self.dac = DeviceParameter.empty;
+            self.dac_upper_limits = DeviceParameter.empty;
+            self.dac_lower_limits = DeviceParameter.empty;
+            for nn = 1:self.NUM_DAC
+                self.dac(nn) = DeviceParameter([0,15],self.dacRegs(nn),'int16')...
+                    .setLimits('lower',-1,'upper',1)...
+                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                self.dac_lower_limits(nn) = DeviceParameter([0,15],self.dacLimitRegs(nn),'int16')...
+                    .setLimits('lower',-1,'upper',1)...
+                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                self.dac_upper_limits(nn) = DeviceParameter([16,31],self.dacLimitRegs(nn),'int16')...
+                    .setLimits('lower',-1,'upper',1)...
+                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
             end
             %
             % Number of samples for reading raw ADC data
@@ -124,9 +165,10 @@ classdef PowerServoControl < handle
             %
             % PID settings
             %
+            self.output_switch = DeviceParameter([2,3],self.topReg).setLimits('lower',0,'upper',3);
             self.pids = PowerServoPID.empty;
             for nn = 1:self.NUM_PID
-                self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn),self.pwmLimitRegs(nn));
+                self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn));
             end
             %
             % FIFO routing
@@ -146,6 +188,12 @@ classdef PowerServoControl < handle
             self.log2_rate.set(13);
             self.cic_shift.set(-3);
             self.numSamples.set(4000);
+            self.output_switch.set(0);
+            self.dac.set([0,0]);
+            self.pwm_lower_limits.set([0,0]);
+            self.pwm_upper_limits.set([0.25,0.25]);
+            self.dac_lower_limits.set([0,0]);
+            self.dac_upper_limits.set([0.25,0.25]);
             self.pids.setDefaults;
             for nn = 1:numel(self.fifo_route)
                 self.fifo_route(nn).set(0);
@@ -166,6 +214,17 @@ classdef PowerServoControl < handle
         function self = check(self)
 
         end
+
+%         function self = set_output_devices(self,devices)
+%             %SET_OUTPUT_DEVICE Sets the PID output devices to either PWM or
+%             %DAC
+%             if iscell(devices) && numel(devices) == 2
+%                 for nn = 1:self.NUM_PID
+%                     if strcmpi(devices{nn},'pwm')
+%                         self.output_switch(nn).set(0);
+%             if strcmpi(devices,'pwm')
+% 
+%         end
         
         function self = upload(self)
             %UPLOAD Uploads register values to the device
@@ -288,9 +347,9 @@ classdef PowerServoControl < handle
 
 
         function self = getData(self,numSamples,saveType)
-            %GETDATA Fetches demodulated data from the device
+            %GETDATA Fetches data from the device
             %
-            %   SELF = GETDATA(NUMSAMPLES) Acquires NUMSAMPLES of demodulated data
+            %   SELF = GETDATA(NUMSAMPLES) Acquires NUMSAMPLES of data
             %
             %   SELF = GETDATA(__,SAVETYPE) uses SAVETYPE for saving data.  For advanced
             %   users only: see the readme
@@ -330,53 +389,6 @@ classdef PowerServoControl < handle
                 end
             end
         end
-        
-        function self = getVoltageStepResponse(self,numSamples,jump_index,jump_amount)
-            %GETDEMODULATEDDATA Fetches demodulated data from the device
-            %
-            %   SELF = GETDEMODULATEDDATA(NUMSAMPLES) Acquires NUMSAMPLES of demodulated data
-            %
-            %   SELF = GETDEMODULATEDDATA(__,SAVETYPE) uses SAVETYPE for saving data.  For advanced
-            %   users only: see the readme
-            if isnumeric(jump_index)
-                jump_index = round(jump_index);
-                if all(jump_index ~= [1,2])
-                    error('Only allowed values of jump_index are 1 and 2!');
-                end
-            else
-                error('Only numeric values are allowed for JUMP_INDEX');
-            end
-            numSamples = round(numSamples);
-            jump_amount = round(jump_amount/self.CONV_PWM);
-            Vx = self.pwm(1).intValue;
-            Vy = self.pwm(2).intValue;
-            Vz = self.pwm(3).intValue;
-            write_arg = {'./analyze_jump_response','-n',sprintf('%d',numSamples),'-j',sprintf('%d',round(jump_amount)),...
-                            '-i',sprintf('%d',round(jump_index)),'-x',sprintf('%d',round(Vx)),'-s',sprintf('%d',PowerServoControl.NUM_MEAS),...
-                            '-y',sprintf('%d',round(Vy)),'-z',sprintf('%d',round(Vz))};
-            if self.auto_retry
-                for jj = 1:10
-                    try
-                        self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
-                        raw = typecast(self.conn.recvMessage,'uint8');
-                        d = self.convertData(raw);
-                        self.data = d;
-                        self.t = self.dt()*(0:(numSamples-1));
-                        break;
-                    catch e
-                        if jj == 10
-                            rethrow(e);
-                        end
-                    end
-                end
-            else
-                self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
-                raw = typecast(self.conn.recvMessage,'uint8');
-                d = self.convertData(raw);
-                self.data = d;
-                self.t = self.dt()*(0:(numSamples-1));
-            end
-        end
 
         function self = getRAM(self,numSamples)
             %GETRAM Fetches recorded in block memory from the device
@@ -407,25 +419,33 @@ classdef PowerServoControl < handle
         
         function disp(self)
             strwidth = 20;
-            fprintf(1,'DeviceControl object with properties:\n');
+            fprintf(1,'PowerServoControl object with properties:\n');
             fprintf(1,'\t Registers\n');
-            self.topReg.print('topReg',strwidth);
-            self.filterReg.print('filterReg',strwidth);
-            self.pwmRegs.print('pwmReg',strwidth);
-            self.pidControlRegs.print('controlRegs',strwidth);
-            self.pidGainRegs.print('gainRegs',strwidth);
-            self.pwmLimitRegs.print('pwmLimitRegs',strwidth);
+            p = properties(self);
+            for nn = 1:numel(p)
+                if isa(self.(p{nn}),'DeviceRegister')
+                    self.(p{nn}).print(p{nn},strwidth);
+                end
+            end            
             fprintf(1,'\t ----------------------------------\n');
             fprintf(1,'\t Parameters\n')
-            
-            for nn = 1:numel(self.pwm)
-                self.pwm(nn).print(sprintf('PWM %d',nn),strwidth,'%.3f');
-            end
             self.log2_rate.print('Log2 Rate',strwidth,'%.0f');
-            self.cic_shift.print('CIC shift',strwidth,'%.0f');
+            self.cic_shift.print('CIC shift',strwidth,'%.0f');                     
+            for nn = 1:numel(self.pwm)
+                self.pwm(nn).print(sprintf('PWM %d',nn),strwidth,'%.3f','V');
+                self.pwm_lower_limits(nn).print(sprintf('PWM %d lower limit',nn),strwidth,'%.3f','V');
+                self.pwm_upper_limits(nn).print(sprintf('PWM %d upper limit',nn),strwidth,'%.3f','V');
+            end
+            for nn = 1:numel(self.dac)
+                self.dac(nn).print(sprintf('DAC %d',nn),strwidth,'%.3f','V');
+                self.dac_lower_limits(nn).print(sprintf('DAC %d lower limit',nn),strwidth,'%.3f','V');
+                self.dac_upper_limits(nn).print(sprintf('DAC %d upper limit',nn),strwidth,'%.3f','V');
+            end
+            
             for nn = 1:numel(self.fifo_route)
                 self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%d');
             end
+            self.output_switch.print('Output switch',strwidth,'%d');
             for nn = 1:self.NUM_PID
                 fprintf(1,'\t ----------------------------------\n');
                 fprintf(1,'\t PID %d Parameters\n',nn);

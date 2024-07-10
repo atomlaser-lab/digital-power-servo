@@ -48,6 +48,7 @@ END COMPONENT;
 constant CIC_OUTPUT_WIDTH   :   natural :=  56;
 constant CIC_ACTUAL_WIDTH   :   natural :=  53;
 type t_cic_o_array is array(natural range <>) of std_logic_vector(CIC_OUTPUT_WIDTH - 1 downto 0);
+type t_cic_array is array(natural range <>) of std_logic_vector(CIC_ACTUAL_WIDTH - 1 downto 0);
 type t_filter_data_i is array(natural range <>) of std_logic_vector(15 downto 0);
 
 --
@@ -61,6 +62,7 @@ signal filterConfig, filterConfig_old   :   std_logic_vector(15 downto 0);
 signal valid_config                     :   std_logic;
 signal filter_o                         :   t_cic_o_array(NUM_INPUT_SIGNALS - 1 downto 0);
 signal valid_filter_o                   :   std_logic_vector(NUM_INPUT_SIGNALS - 1 downto 0);
+signal filtered_data                    :   t_cic_array(NUM_INPUT_SIGNALS - 1 downto 0);
 
 begin
 --
@@ -96,6 +98,7 @@ end process;
 --
 FILT_GEN: for I in 0 to NUM_INPUT_SIGNALS - 1 generate
     filter_data_i(I)(ADC_WIDTH - 1 downto 0) <= std_logic_vector(data_i(I));
+    filter_data_i(I)(15 downto ADC_WIDTH) <= (others => '0');
     Filt_X : CICfilter
     PORT MAP (
         aclk                        => clk,
@@ -109,6 +112,7 @@ FILT_GEN: for I in 0 to NUM_INPUT_SIGNALS - 1 generate
         m_axis_data_tdata           => filter_o(I),
         m_axis_data_tvalid          => valid_filter_o(I)
     );
+--    filtered_data(I) <= filter_o(I)(CIC_ACTUAL_WIDTH - 1 downto 0);
     filtered_data_o(I) <= resize(shift_right(signed(filter_o(I)(CIC_ACTUAL_WIDTH - 1 downto 0)),cicShift + to_integer(setShift)),t_meas'length);
 end generate FILT_GEN;
 
