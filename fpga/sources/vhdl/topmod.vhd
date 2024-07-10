@@ -346,9 +346,9 @@ enableFIFO <= fifoReg(0);
 fifoReset <= fifoReg(1);
 fifo_route <= topReg(1 downto 0);
 FIFO_GEN: for I in 0 to NUM_FIFOS - 1 generate
-    fifoActuator(I) <= std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH)) when pid_output_switch(I) = '0' else
+    fifo_actuator(I) <= std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH)) when pid_output_switch(I) = '0' else
                        std_logic_vector(resize(dac_limit(I),FIFO_WIDTH));
-    fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else fifoActuator(I);
+    fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else fifo_actuator(I);
     fifoValid(I) <= ((filter_valid(I) and (not(fifo_route(I)) or not(pid_enable(I)))) or (pid_valid(I) and fifo_route(I) and pid_enable(I))) and enableFIFO;
     PhaseMeas_FIFO_NORMAL_X: FIFOHandler
     port map(

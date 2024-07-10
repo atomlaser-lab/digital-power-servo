@@ -1,13 +1,13 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0xC3AD17F527D5DB81",
+      "boundary_crc": "0xC3AD17F5458098E2",
       "device": "xc7z010clg400-1",
       "gen_directory": "../../../../basic-project.gen/sources_1/bd/system",
       "name": "system",
       "rev_ctrl_bd_flag": "RevCtrlBdOff",
       "synth_flow_mode": "None",
-      "tool_version": "2023.1",
+      "tool_version": "2023.2",
       "validated": "true"
     },
     "design_tree": {
@@ -392,6 +392,7 @@
         "components": {
           "util_ds_buf_1": {
             "vlnv": "xilinx.com:ip:util_ds_buf:2.2",
+            "ip_revision": "31",
             "xci_name": "system_util_ds_buf_1_0",
             "xci_path": "ip\\system_util_ds_buf_1_0\\system_util_ds_buf_1_0.xci",
             "inst_hier_path": "Utility_Buffers/util_ds_buf_1",
@@ -403,6 +404,7 @@
           },
           "util_ds_buf_2": {
             "vlnv": "xilinx.com:ip:util_ds_buf:2.2",
+            "ip_revision": "31",
             "xci_name": "system_util_ds_buf_2_0",
             "xci_path": "ip\\system_util_ds_buf_2_0\\system_util_ds_buf_2_0.xci",
             "inst_hier_path": "Utility_Buffers/util_ds_buf_2",
@@ -506,6 +508,7 @@
         "components": {
           "AXI_Parse_0": {
             "vlnv": "xilinx.com:module_ref:AXI_Parse:1.0",
+            "ip_revision": "1",
             "xci_name": "system_AXI_Parse_0_0",
             "xci_path": "ip\\system_AXI_Parse_0_0\\system_AXI_Parse_0_0.xci",
             "inst_hier_path": "PS7/AXI_Parse_0",
@@ -778,6 +781,7 @@
           },
           "proc_sys_reset_0": {
             "vlnv": "xilinx.com:ip:proc_sys_reset:5.0",
+            "ip_revision": "14",
             "xci_name": "system_proc_sys_reset_0_0",
             "xci_path": "ip\\system_proc_sys_reset_0_0\\system_proc_sys_reset_0_0.xci",
             "inst_hier_path": "PS7/proc_sys_reset_0",
@@ -789,6 +793,7 @@
           },
           "processing_system7_0": {
             "vlnv": "xilinx.com:ip:processing_system7:5.5",
+            "ip_revision": "6",
             "xci_name": "system_processing_system7_0_0",
             "xci_path": "ip\\system_processing_system7_0_0\\system_processing_system7_0_0.xci",
             "inst_hier_path": "PS7/processing_system7_0",
@@ -2639,6 +2644,7 @@
           },
           "axi_protocol_convert_0": {
             "vlnv": "xilinx.com:ip:axi_protocol_converter:2.1",
+            "ip_revision": "29",
             "xci_name": "system_axi_protocol_convert_0_0",
             "xci_path": "ip\\system_axi_protocol_convert_0_0\\system_axi_protocol_convert_0_0.xci",
             "inst_hier_path": "PS7/axi_protocol_convert_0",
@@ -2750,6 +2756,7 @@
       },
       "AXIS_Red_Pitaya_ADC_0": {
         "vlnv": "xilinx.com:module_ref:AXIS_Red_Pitaya_ADC:1.0",
+        "ip_revision": "1",
         "xci_name": "system_AXIS_Red_Pitaya_ADC_0_0",
         "xci_path": "ip\\system_AXIS_Red_Pitaya_ADC_0_0\\system_AXIS_Red_Pitaya_ADC_0_0.xci",
         "inst_hier_path": "AXIS_Red_Pitaya_ADC_0",
@@ -2852,6 +2859,7 @@
       },
       "AXIS_Red_Pitaya_DAC_0": {
         "vlnv": "xilinx.com:module_ref:AXIS_Red_Pitaya_DAC:1.0",
+        "ip_revision": "1",
         "xci_name": "system_AXIS_Red_Pitaya_DAC_0_0",
         "xci_path": "ip\\system_AXIS_Red_Pitaya_DAC_0_0\\system_AXIS_Red_Pitaya_DAC_0_0.xci",
         "inst_hier_path": "AXIS_Red_Pitaya_DAC_0",
@@ -2993,6 +3001,7 @@
       },
       "clk_wiz_0": {
         "vlnv": "xilinx.com:ip:clk_wiz:6.0",
+        "ip_revision": "13",
         "xci_name": "system_clk_wiz_0_0",
         "xci_path": "ip\\system_clk_wiz_0_0\\system_clk_wiz_0_0.xci",
         "inst_hier_path": "clk_wiz_0",
@@ -3031,6 +3040,7 @@
       },
       "topmod_0": {
         "vlnv": "xilinx.com:module_ref:topmod:1.0",
+        "ip_revision": "1",
         "xci_name": "system_topmod_0_0",
         "xci_path": "ip\\system_topmod_0_0\\system_topmod_0_0.xci",
         "inst_hier_path": "topmod_0",
