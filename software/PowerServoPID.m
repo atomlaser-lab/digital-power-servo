@@ -10,12 +10,10 @@ classdef PowerServoPID < PowerServoSubModule
         polarity        %Polarity of PID module
         enable          %Enable/disable PID module
         control         %Control/set-point of the module
-        lowerLimit      %Lower output limit for the module
-        upperLimit      %Upper output limit for the module
     end
     
     methods
-        function self = PowerServoPID(parent,control_reg,gain_reg,limit_reg)
+        function self = PowerServoPID(parent,control_reg,gain_reg)
             %PowerServoPID Creates an instance of the class
             %
             %   SELF = PowerServoPID(PARENT,REGS) Creates instance SELF
@@ -39,12 +37,6 @@ classdef PowerServoPID < PowerServoSubModule
                 .setLimits('lower',0,'upper',2^8-1);
             self.divisor = DeviceParameter([24,31],gain_reg)...
                 .setLimits('lower',0,'upper',2^8-1);
-            self.lowerLimit = DeviceParameter([0,15],limit_reg,'uint32')...
-                .setLimits('lower',-1,'upper',1)...
-                .setFunctions('to',@(x) x/self.parent.CONV_PWM,'from',@(x) x*self.parent.CONV_PWM);
-            self.upperLimit = DeviceParameter([16,31],limit_reg,'uint32')...
-                .setLimits('lower',-1,'upper',1)...
-                .setFunctions('to',@(x) x/self.parent.CONV_PWM,'from',@(x) x*self.parent.CONV_PWM);
         end
         
         function self = setDefaults(self)
@@ -65,8 +57,6 @@ classdef PowerServoPID < PowerServoSubModule
                 self.Ki.set(0);
                 self.Kd.set(0);
                 self.divisor.set(8);
-                self.lowerLimit.set(0);
-                self.upperLimit.set(0.25);
             end
         end
         
@@ -96,8 +86,6 @@ classdef PowerServoPID < PowerServoSubModule
             s{5} = self.Ki.print('Ki',width,'%d');
             s{6} = self.Kd.print('Kd',width,'%d');
             s{7} = self.divisor.print('Divisor',width,'%d');
-            s{8} = self.lowerLimit.print('Lower Limit',width,'%.3f','V');
-            s{9} = self.upperLimit.print('Upper Limit',width,'%.3f','V');
             
             ss = '';
             for nn = 1:numel(s)
