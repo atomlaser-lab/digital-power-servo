@@ -165,10 +165,11 @@ classdef PowerServoControl < handle
             %
             % PID settings
             %
-            self.output_switch = DeviceParameter([2,3],self.topReg).setLimits('lower',0,'upper',3);
+            self.output_switch = DeviceParameter.empty;
             self.pids = PowerServoPID.empty;
             for nn = 1:self.NUM_PID
                 self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn));
+                self.output_switch = DeviceParameter([2,2] + (nn - 1),self.topReg).setLimits('lower',0,'upper',1);
             end
             %
             % FIFO routing
@@ -188,7 +189,7 @@ classdef PowerServoControl < handle
             self.log2_rate.set(13);
             self.cic_shift.set(-3);
             self.numSamples.set(4000);
-            self.output_switch.set(0);
+            self.output_switch.set([0,0]);
             self.dac.set([0,0]);
             self.pwm_lower_limits.set([0,0]);
             self.pwm_upper_limits.set([0.25,0.25]);
@@ -445,7 +446,9 @@ classdef PowerServoControl < handle
             for nn = 1:numel(self.fifo_route)
                 self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%d');
             end
-            self.output_switch.print('Output switch',strwidth,'%d');
+            for nn = 1:numel(self.output_switch)
+                self.output_switch(nn).print(sprintf('Output switch %d',nn),strwidth,'%d');
+            end
             for nn = 1:self.NUM_PID
                 fprintf(1,'\t ----------------------------------\n');
                 fprintf(1,'\t PID %d Parameters\n',nn);
