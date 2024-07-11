@@ -424,6 +424,7 @@ begin
         reset <= '0';
         bus_s <= INIT_AXI_BUS_SLAVE;
         triggers <= (others => '0');
+        topReg <= (others => '0');
         outputReg <= (others => '0');
         filterReg <= X"0000000a";
         pwm_regs <= (others => (others => '0'));
