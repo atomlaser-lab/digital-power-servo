@@ -183,7 +183,7 @@ signal filter_valid         :   std_logic_vector(1 downto 0);
 --
 constant NUM_FIFOS          :   natural :=  filtered_data'length;
 type t_fifo_data_array is array(natural range <>) of std_logic_vector(FIFO_WIDTH - 1 downto 0);
-type t_fifo_route is array(natural range <>) of unsigned(3 downto 0);
+type t_fifo_route is array(natural range <>) of std_logic_vector(3 downto 0);
 
 signal fifoData             :   t_fifo_data_array(NUM_FIFOS - 1 downto 0);
 signal fifoValid            :   std_logic_vector(NUM_FIFOS - 1 downto 0);
@@ -359,21 +359,21 @@ end generate DAC_LIMIT_GEN;
 --
 enableFIFO <= fifoReg(0);
 fifoReset <= fifoReg(1);
-fifo_route(0) <= unsigned(topReg(3 downto 0));
-fifo_route(1) <= unsigned(topReg(7 downto 4));
+fifo_route(0) <= topReg(3 downto 0);
+fifo_route(1) <= topReg(7 downto 4);
 FIFO_GEN: for I in 0 to NUM_FIFOS - 1 generate
 --    fifo_actuator(I) <= std_logic_vector(resize(pwm_limit(I),FIFO_WIDTH)) when pid_output_switch(I)(1) = '0' else
 --                        std_logic_vector(resize(dac_limit(I),FIFO_WIDTH));
 --    fifoData(I) <= std_logic_vector(resize(filtered_data(I),FIFO_WIDTH)) when fifo_route(I) = '0' else fifo_actuator(I);
 --    fifoValid(I) <= ((filter_valid(I) and (not(fifo_route(I)) or not(pid_enable(I)))) or (pid_valid(I) and fifo_route(I) and pid_enable(I))) and enableFIFO;
     fifoValid(I) <= filter_valid(I);
-    fifoData(I) <=  std_logic_vector(resize(filtered_data(0),FIFO_WIDTH)) when fifo_route(I) = 0 else
-                    std_logic_vector(resize(filtered_data(1),FIFO_WIDTH)) when fifo_route(I) = 1 else
-                    std_logic_vector(resize(pwm_limit(0),FIFO_WIDTH)) when fifo_route(I) = 2 else
-                    std_logic_vector(resize(pwm_limit(1),FIFO_WIDTH)) when fifo_route(I) = 3 else
-                    std_logic_vector(resize(dac_limit(0),FIFO_WIDTH)) when fifo_route(I) = 4 else
-                    std_logic_vector(resize(dac_limit(1),FIFO_WIDTH)) when fifo_route(I) = 5 else
-                    (others => '0');
+    fifoData(I) <=  std_logic_vector(resize(filtered_data(0),FIFO_WIDTH)) when fifo_route(I) = X"0" else
+                    std_logic_vector(resize(filtered_data(1),FIFO_WIDTH)) when fifo_route(I) = X"1" else
+                    std_logic_vector(resize(pwm_limit(0),FIFO_WIDTH)) when fifo_route(I) = X"2" else
+                    std_logic_vector(resize(pwm_limit(1),FIFO_WIDTH)) when fifo_route(I) = X"3" else
+                    std_logic_vector(resize(dac_limit(0),FIFO_WIDTH)) when fifo_route(I) = X"4" else
+                    std_logic_vector(resize(dac_limit(1),FIFO_WIDTH)) when fifo_route(I) = X"5" else
+                    (0 => '1',others => '0');
     PhaseMeas_FIFO_NORMAL_X: FIFOHandler
     port map(
         wr_clk      =>  adcClk,
