@@ -57,7 +57,7 @@ classdef PowerServoControl < handle
         %
         CONV_ADC_LV = 1.1851/2^(PowerServoControl.ADC_WIDTH - 1);
         CONV_ADC_HV = 29.3570/2^(PowerServoControl.ADC_WIDTH - 1);
-        CONV_DAC = 1/2^(PowerServoControl.DAC_WIDTH - 1);
+        CONV_DAC = 1/(2^(PowerServoControl.DAC_WIDTH - 1) - 1);
         CONV_PWM = 1.6/(2^PowerServoControl.PWM_WIDTH - 1);
     end
     
@@ -149,13 +149,13 @@ classdef PowerServoControl < handle
             for nn = 1:self.NUM_DAC
                 self.dac(nn) = DeviceParameter([0,15],self.dacRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
                 self.dac_lower_limits(nn) = DeviceParameter([0,15],self.dacLimitRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
                 self.dac_upper_limits(nn) = DeviceParameter([16,31],self.dacLimitRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
             end
             %
             % Number of samples for reading raw ADC data
@@ -169,7 +169,7 @@ classdef PowerServoControl < handle
             self.pids = PowerServoPID.empty;
             for nn = 1:self.NUM_PID
                 self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn));
-                self.output_switch = DeviceParameter([2,2] + (nn - 1),self.topReg).setLimits('lower',0,'upper',1);
+                self.output_switch(nn,1) = DeviceParameter([2,2] + (nn - 1),self.topReg).setLimits('lower',0,'upper',1);
             end
             %
             % FIFO routing
@@ -187,7 +187,7 @@ classdef PowerServoControl < handle
             %   SELF = SETDEFAULTS(SELF) sets default values for SELF
             self.pwm.set([0,0]);
             self.log2_rate.set(13);
-            self.cic_shift.set(-3);
+            self.cic_shift.set(0);
             self.numSamples.set(4000);
             self.output_switch.set([0,0]);
             self.dac.set([0,0]);
@@ -334,7 +334,7 @@ classdef PowerServoControl < handle
             elseif strcmpi(self.jumpers,'lv')
                 c = self.CONV_ADC_LV;
             end
-            r = x*c;
+            r = x*c*2^(self.cic_shift.value);
         end
         
         function r = convert2int(self,x)
@@ -343,7 +343,7 @@ classdef PowerServoControl < handle
             elseif strcmpi(self.jumpers,'lv')
                 c = self.CONV_ADC_LV;
             end
-            r = x/c;
+            r = x/c/2^(self.cic_shift.value);
         end
 
 
@@ -383,10 +383,14 @@ classdef PowerServoControl < handle
             end
 
             for nn = 1:self.NUM_MEAS
-                if self.fifo_route(nn).value
+                if self.fifo_route(nn).value == 0
                     self.data(:,nn) = self.convert2volts(self.data(:,nn));
                 else
-                    self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
+                    if self.output_switch(nn).value == 0
+                        self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
+                    else
+                        self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
+                    end
                 end
             end
         end
