@@ -391,14 +391,12 @@ classdef PowerServoControl < handle
             end
 
             for nn = 1:self.NUM_MEAS
-                if self.fifo_route(nn).value == 0
+                if strfind(self.fifo_route(nn).value,'IN')
                     self.data(:,nn) = self.convert2volts(self.data(:,nn));
+                elseif strfind(self.fifo_route(nn).value,'OUT')
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
                 else
-                    if self.output_switch(nn).value == 0
-                        self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
-                    else
-                        self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
-                    end
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
                 end
             end
         end
@@ -456,10 +454,10 @@ classdef PowerServoControl < handle
             end
             
             for nn = 1:numel(self.fifo_route)
-                self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%d');
+                self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%s');
             end
             for nn = 1:numel(self.output_switch)
-                self.output_switch(nn).print(sprintf('Output switch %d',nn),strwidth,'%d');
+                self.output_switch(nn).print(sprintf('Output switch %d',nn),strwidth,'%s');
             end
             for nn = 1:self.NUM_PID
                 fprintf(1,'\t ----------------------------------\n');
@@ -570,17 +568,17 @@ classdef PowerServoControl < handle
         end
 
         function r = convert_fifo_table(x)
-            if isnumeric(x)
+            if ischar(x) || isstring(x)
                 r = find(strcmpi(x,PowerServoControl.FIFO_ROUTE_OPTIONS)) - 1;
-            elseif ischar(x) || isstring(x)
+            elseif isnumeric(x)
                 r = PowerServoControl.FIFO_ROUTE_OPTIONS{x + 1};
             end
         end
 
         function r = convert_pid_table(x)
-            if isnumeric(x)
+            if ischar(x) || isstring(x)
                 r = find(strcmpi(x,PowerServoControl.PID_OUTPUT_OPTIONS)) - 1;
-            elseif ischar(x) || isstring(x)
+            elseif isnumeric(x)
                 r = PowerServoControl.PID_OUTPUT_OPTIONS{x + 1};
             end
         end
