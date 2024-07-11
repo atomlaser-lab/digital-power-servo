@@ -59,6 +59,11 @@ classdef PowerServoControl < handle
         CONV_ADC_HV = 29.3570/2^(PowerServoControl.ADC_WIDTH - 1);
         CONV_DAC = 1/(2^(PowerServoControl.DAC_WIDTH - 1) - 1);
         CONV_PWM = 1.6/(2^PowerServoControl.PWM_WIDTH - 1);
+        %
+        % Output options
+        %
+        PID_OUTPUT_OPTIONS = {'AO0','AO1','OUT1','OUT2'};
+        FIFO_ROUTE_OPTIONS = {'IN1','IN2','AO0','AO1','OUT1','OUT2'};
     end
     
     methods
@@ -169,15 +174,17 @@ classdef PowerServoControl < handle
             self.pids = PowerServoPID.empty;
             for nn = 1:self.NUM_PID
                 self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn));
-                self.output_switch(nn,1) = DeviceParameter([2,2] + (nn - 1),self.topReg).setLimits('lower',0,'upper',1);
+                self.output_switch(nn,1) = DeviceParameter([8,9] + 2*(nn - 1),self.topReg).setLimits('lower',0,'upper',3)...
+                    .setFunctions('to',@(x) self.convert_pid_table(x),'from',@(x) self.convert_pid_table(x));
             end
             %
             % FIFO routing
             %
             self.fifo_route = DeviceParameter.empty;
             for nn = 1:self.NUM_MEAS
-                self.fifo_route(nn) = DeviceParameter((nn - 1) + [0,0],self.topReg,'uint32')...
-                    .setLimits('lower',0,'upper',1);
+                self.fifo_route(nn) = DeviceParameter((nn - 1)*4 + [0,3],self.topReg,'uint32')...
+                    .setLimits('lower',0,'upper',5)...
+                    .setFunctions('to',@(x) self.convert_fifo_table(x),'from',@(x) self.convert_fifo_table(x));
             end
         end
         
@@ -189,7 +196,8 @@ classdef PowerServoControl < handle
             self.log2_rate.set(13);
             self.cic_shift.set(0);
             self.numSamples.set(4000);
-            self.output_switch.set([0,0]);
+            self.output_switch(1).set('AO0');
+            self.output_switch(2).set('AO1');
             self.dac.set([0,0]);
             self.pwm_lower_limits.set([0,0]);
             self.pwm_upper_limits.set([0.25,0.25]);
@@ -197,7 +205,7 @@ classdef PowerServoControl < handle
             self.dac_upper_limits.set([0.25,0.25]);
             self.pids.setDefaults;
             for nn = 1:numel(self.fifo_route)
-                self.fifo_route(nn).set(0);
+                self.fifo_route(nn).set(sprintf('IN%d',nn));
             end
 
             self.auto_retry = true;
@@ -561,6 +569,23 @@ classdef PowerServoControl < handle
             v = double(d)*c;
         end
 
+        function r = convert_fifo_table(x)
+            if isnumeric(x)
+                r = find(strcmpi(x,PowerServoControl.FIFO_ROUTE_OPTIONS)) - 1;
+            elseif ischar(x) || isstring(x)
+                r = PowerServoControl.FIFO_ROUTE_OPTIONS{x + 1};
+            end
+        end
+
+        function r = convert_pid_table(x)
+            if isnumeric(x)
+                r = find(strcmpi(x,PowerServoControl.PID_OUTPUT_OPTIONS)) - 1;
+            elseif ischar(x) || isstring(x)
+                r = PowerServoControl.PID_OUTPUT_OPTIONS{x + 1};
+            end
+        end
+
     end
     
 end
+
