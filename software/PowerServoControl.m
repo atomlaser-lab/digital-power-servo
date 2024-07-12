@@ -78,7 +78,7 @@ classdef PowerServoControl < handle
             %
             %   SELF = POWERSERVOCONTROL(HOST) creates an instance with socket
             %   server host address HOST
-
+            
             if numel(varargin) == 1
                 self.conn = ConnectionClient(varargin{1});
             else
@@ -580,6 +580,16 @@ classdef PowerServoControl < handle
                 r = find(strcmpi(x,PowerServoControl.PID_OUTPUT_OPTIONS)) - 1;
             elseif isnumeric(x)
                 r = PowerServoControl.PID_OUTPUT_OPTIONS{x + 1};
+            end
+        end
+
+        function app = get_running_app_instance
+            h = findall(groot,'type','figure');
+            for nn = 1:numel(h)
+                if strcmpi(h(nn).Name,'Power Servo Control')
+                    app = h(nn).RunningAppInstance;
+                    break;
+                end
             end
         end
 
