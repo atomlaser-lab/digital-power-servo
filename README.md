@@ -34,11 +34,11 @@ This project implements a reasonably general-purpose digital power servo or lock
 
    6. Upload the bitstream to the FPGA by navigating to the `power-servo` directory and running `cat power-servo.bit > /dev/xdevcfg`.
 
-   7. Start the Python server by running `python3 /root/server/appserver.py`.  If you need to specify your IP address run instead `python3 /root/server/appserver.py <ip address>`.  The script will print the IP address it is using on the command line.
+   7. Start the Python server by navigating to the `power-servo` directory and running `python3 /root/server/appserver.py`.  If you need to specify your IP address run instead `python3 /root/server/appserver.py <ip address>`.  The script will print the IP address it is using on the command line, saying `Listening on <IP address>`.
 
    8. On your computer in MATLAB, add the interface repository directory to your MATLAB path.
 
-   9. Navigate to this repository's software directory, and create a new control object using `servo = PowerServoControl(<ip address>)` where `<ip address>` is the IP address of the RP.  If the FPGA has just been reconfigured, set the default values using `servo.setDefaults` and upload them using `servo.upload`.  If you want to retrieve the current operating values use the command `servo.fetch`.
+   9. Navigate to this repository's software directory (or add it to your MATLAB path), and create a new control object using `servo = PowerServoControl(<ip address>)` where `<ip address>` is the IP address of the RP.  If the FPGA has just been reconfigured, set the default values using `servo.setDefaults` and upload them using `servo.upload`.  If you want to retrieve the current operating values use the command `servo.fetch`.
 
    10. You can control the device using the command line, but you can also use a GUI to do so.  Start the GUI by running the command `PowerServoGUI(servo)`.  This will start up the GUI.  You can also run `PowerServoGUI(<ip address>)` if you don't have the `PowerServoControl` object in your workspace.
 
@@ -69,7 +69,9 @@ This provides control over the output values and limits of the two PWM outputs o
 ## PID 1 & 2
 
 PID 1 and PID 2 control the two PID modules, where IN1 is the measurement input for PID 1 and IN2 is the measurement input for PID 2.  PIDs can be enabled/disabled using the appropriate slider.  The PID polarity can be changed from negative to positive, where a negative polarity calculates the error signal as $e = r - y$ with control value $r$ and measurement $y$.  Values `Kp`, `Ki`, and `Kd` control the proportional, integral, and derivative gain terms, and `Divisor` is an overall scaling factor.  If `Divisor` is $N$, the PID algorithm calculates the next actuator value from the current actuator value as
+
 $$u_{n} = u_{n - 1} + 2^{-N}\left(K_p[e_{n} - e_{n-1}] + K_i\frac{e_n + e_{n + 1}}{2} + K_d[e_n - 2e_{n - 1} + e_{n - 2}]\right).$$
+
 Gain values `Kp`, `Ki`, and `Kd` can range from $[0,255]$.  The control value can be set using the `Control` box, and the actuator that the PID output is routed to is selectable using the drop-down menu.  The PID output is added to the manual output in either `Main DAC Control` or `PWM Control`, and that sum is then limited according to the set limits.  
 
 
@@ -82,6 +84,25 @@ Gain values `Kp`, `Ki`, and `Kd` can range from $[0,255]$.  The control value ca
 `Auto-Fetch Data` continuously uploads parameters and fetches demodulated data and displays it on the plot.  The update time is given in `Plot Update Time` in milliseconds.  You can change the parameters as it grabs data in order to optimise the bias values.
 
 You can also save and load bias control configurations using the `Load` and `Save` buttons.
+
+# Troubleshooting
+
+## GUI unresponsive
+
+If the GUI appears unresponsive, in that changing GUI parameters such as manual settings or the lock enable status appears to do nothing:
+
+  1. IS THE LOCK ENGAGED?  If the lock is engaged and you try to change the manual voltages, it might appear that nothing is happening because the lock forces the system to stay at the current set-point.
+  2. IS AUTO_UPDATE DISABLED?  If Auto-Update is disabled, then changed parameters on the GUI will not be uploaded to the device.  Set Auto-Update to "On".
+  3. Has the Red Pitaya been disconnected from the network?  Bring up the PuTTY or terminal window that is logged into the Red Pitaya.  If the server is running, use CTRL-Z to suspend it.  If the terminal throws an error, like "Connection lost" or somesuch, then reconnect to the Red Pitaya (on PuTTY you can right-click on the window's title bar and click "Reconnect").  Navigate back to the `iq-bias-control` directory using `cd iq-bias-control` and start the Python server again using `python3 /root/server/appserver.py`.  If the running server suspended without error, bring it back to the foreground using the command `fg`.
+  4. Is the figure data in the GUI not updating?  This is probably just an error in the timer used for non-command-line-blocking fetching of the data.  Set Auto-Fetch Data to "Off" and then "On" again.
+
+## Changing control voltage has no effect
+
+If you find that changing the control voltage has no effect, there are at least two possible reasons:
+
+  1. IS THE LOCK ENGAGED?  If it's not engaged, then don't expect the control value to have any effect.
+  2. If there is no integral gain, then the PID controller won't force the measurement to the control value over long periods of time.  Set a non-zero integral gain.
+  3. Is the actuator at its limit?  If the actuator is at one of its limits, it won't be able to force the output to go higher or lower.  You can check what the output value is by plotting the appropriate actuator by changing drop-down menus for the FIFO buffers.  If you are at one of the output limits, change them to be more appropriate.
 
 # Creating the project
 
