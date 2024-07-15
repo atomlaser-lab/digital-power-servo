@@ -401,6 +401,62 @@ classdef PowerServoControl < handle
             end
         end
 
+        function self = getVoltageStepResponse(self,numSamples,actuator,bias_voltage,jump_voltage)
+            %
+            switch lower(actuator)
+                case 'out1'
+                    p = self.dac(1);
+                case 'out2'
+                    p = self.dac(2);
+                case 'ao0'
+                    p = self.pwm(1);
+                case 'ao1'
+                    p = self.pwm(2);
+                otherwise
+                    error('Only actuator values allowed are ''out1'', ''out2'', ''ao0'', and ''ao1''!');
+            end
+            addr = p.regs.addr;
+            bias = p.toInteger(bias_voltage);
+            jump = p.toInteger(jump_voltage);
+
+            numSamples = round(numSamples);
+
+            write_arg = {'./analyze_jump_response','-n',sprintf('%d',numSamples),'-j',sprintf('%d',round(jump)),...
+                            '-i',sprintf('%d',round(addr)),'-b',sprintf('%d',round(bias)),'-s',sprintf('%d',self.NUM_MEAS)};
+            if self.auto_retry
+                for jj = 1:10
+                    try
+                        self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
+                        raw = typecast(self.conn.recvMessage,'uint8');
+                        d = self.convertData(raw);
+                        self.data = d;
+                        self.t = self.dt()*(0:(numSamples-1));
+                        break;
+                    catch e
+                        if jj == 10
+                            rethrow(e);
+                        end
+                    end
+                end
+            else
+                self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
+                raw = typecast(self.conn.recvMessage,'uint8');
+                d = self.convertData(raw);
+                self.data = d;
+                self.t = self.dt()*(0:(numSamples-1));
+            end
+
+            for nn = 1:self.NUM_MEAS
+                if strfind(self.fifo_route(nn).value,'IN')
+                    self.data(:,nn) = self.convert2volts(self.data(:,nn));
+                elseif strfind(self.fifo_route(nn).value,'OUT')
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
+                else
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
+                end
+            end
+        end
+
         function self = getRAM(self,numSamples)
             %GETRAM Fetches recorded in block memory from the device
             %
