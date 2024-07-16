@@ -1,11 +1,11 @@
 %
 % Automatically measure transfer function
 %
-Npoints = 1e3;
+Npoints = 100e-3/servo.dt;
 dV = 0.01;
 Vmax = 0.25;
 V = 0:dV:Vmax;
-FigNum = 1500;
+FigNum = 1600;
 
 %% Measure steady-state response
 check_app();
