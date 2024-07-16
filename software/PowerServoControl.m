@@ -47,7 +47,7 @@ classdef PowerServoControl < handle
         DAC_WIDTH = 14;
         ADC_WIDTH = 14;
         PARAM_WIDTH = 32;
-        PWM_WIDTH = 10;
+        PWM_WIDTH = 13;
         NUM_PID = 2;
         NUM_PWM = 2;
         NUM_MEAS = 2;
