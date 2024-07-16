@@ -50,6 +50,7 @@ constant MULT_LATENCY   :   natural :=  3;
 constant EXP_WIDTH      :   natural :=  16;
 constant GAIN_WIDTH     :   natural :=  8;
 constant MULT_WIDTH     :   natural :=  EXP_WIDTH + GAIN_WIDTH;
+constant ACCUM_WIDTH    :   natural :=  32;
 --
 -- Type definitions
 --
@@ -57,6 +58,7 @@ type t_state_local          is (idle,multiplying,dividing,summing,outputting);
 subtype t_input_local       is signed(EXP_WIDTH-1 downto 0);
 subtype t_gain_local        is std_logic_vector(GAIN_WIDTH-1 downto 0);
 subtype t_mult_local        is signed(MULT_WIDTH-1 downto 0);
+subtype t_accum_local       is signed(ACCUM_WIDTH - 1 downto 0);
 type t_input_local_array    is array(natural range <>) of t_input_local;
 --
 -- Parameters
@@ -70,7 +72,7 @@ signal err                      :   t_input_local_array(2 downto 0);
 signal measurement, control     :   t_input_local;
 signal prop_i, int_i, deriv_i   :   t_input_local;
 signal prop_o, int_o, deriv_o   :   std_logic_vector(MULT_WIDTH - 1 downto 0);
-signal pidSum, pidAccumulate    :   t_mult_local;
+signal pidSum, pidAccumulate    :   t_accum_local;
 
 signal valid_p                  :   std_logic_vector(7 downto 0);
 
@@ -120,7 +122,7 @@ port map(
 --
 -- Sum outputs of multipliers and divide to get correct output
 --
-pidSum <= signed(prop_o) + signed(int_o) + signed(deriv_o);
+pidSum <= resize(signed(prop_o) + signed(int_o) + signed(deriv_o),pidSum'length);
 --
 -- Main process
 --

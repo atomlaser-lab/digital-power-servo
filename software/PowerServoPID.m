@@ -11,6 +11,10 @@ classdef PowerServoPID < PowerServoSubModule
         enable          %Enable/disable PID module
         control         %Control/set-point of the module
     end
+
+    properties(Constant)
+        PID_ACCUM_WIDTH = 32;   %This sets the max "divisor" value
+    end
     
     methods
         function self = PowerServoPID(parent,control_reg,gain_reg)
@@ -36,7 +40,7 @@ classdef PowerServoPID < PowerServoSubModule
             self.Kd = DeviceParameter([16,23],gain_reg)...
                 .setLimits('lower',0,'upper',2^8-1);
             self.divisor = DeviceParameter([24,31],gain_reg)...
-                .setLimits('lower',0,'upper',2^8-1);
+                .setLimits('lower',0,'upper',self.PID_ACCUM_WIDTH);
         end
         
         function self = setDefaults(self)
