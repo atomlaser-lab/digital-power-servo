@@ -3,7 +3,7 @@
 %
 
 clock_freq = 250e6;
-pwm_bit_depth = 10;
+pwm_bit_depth = 14;
 pwm_freq = clock_freq/2^pwm_bit_depth;
 gain = 9.3;
 Vin_peak = 0.8;
@@ -11,19 +11,19 @@ Vin_peak = 0.8;
 f = logspace(-1,7,1e4);
 w = 2*pi*f;
 
-R1 = 100;
-C1 = 8.2e-9 + 2.2e-6;
-R2 = 1e3;
-Resr = 0;
-C2 = .22e-6;
-C3 = 0e-6;
-
 % R1 = 100;
-% C1 = 8.2e-9;
-% R2 = 0*2.2e3;
-% Resr = 2.478;
-% C2 = 47e-6;
+% C1 = 8.2e-9 + 2.2e-6;
+% R2 = 1e3;
+% Resr = 0;
+% C2 = .22e-6;
 % C3 = 0e-6;
+
+R1 = 100;
+C1 = 8.2e-9;
+R2 = 0*2.2e3;
+Resr = 2.478;
+C2 = 47e-6;
+C3 = 0e-6;
 
 ZC1 = 1./(1i*w*C1);
 ZC2 = (1 + 1i*w*Resr*C2)./(1i*w*C2);

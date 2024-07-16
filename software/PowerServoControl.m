@@ -57,8 +57,13 @@ classdef PowerServoControl < handle
         %
         CONV_ADC_LV = 1.1851/2^(PowerServoControl.ADC_WIDTH - 1);
         CONV_ADC_HV = 29.3570/2^(PowerServoControl.ADC_WIDTH - 1);
-        CONV_DAC = 1/2^(PowerServoControl.DAC_WIDTH - 1);
+        CONV_DAC = 1/(2^(PowerServoControl.DAC_WIDTH - 1) - 1);
         CONV_PWM = 1.6/(2^PowerServoControl.PWM_WIDTH - 1);
+        %
+        % Output options
+        %
+        PID_OUTPUT_OPTIONS = {'AO0','AO1','OUT1','OUT2'};
+        FIFO_ROUTE_OPTIONS = {'IN1','IN2','AO0','AO1','OUT1','OUT2'};
     end
     
     methods
@@ -73,7 +78,7 @@ classdef PowerServoControl < handle
             %
             %   SELF = POWERSERVOCONTROL(HOST) creates an instance with socket
             %   server host address HOST
-
+            
             if numel(varargin) == 1
                 self.conn = ConnectionClient(varargin{1});
             else
@@ -149,13 +154,13 @@ classdef PowerServoControl < handle
             for nn = 1:self.NUM_DAC
                 self.dac(nn) = DeviceParameter([0,15],self.dacRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
                 self.dac_lower_limits(nn) = DeviceParameter([0,15],self.dacLimitRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
                 self.dac_upper_limits(nn) = DeviceParameter([16,31],self.dacLimitRegs(nn),'int16')...
                     .setLimits('lower',-1,'upper',1)...
-                    .setFunctions('to',@(x) x*(2^(self.DAC_WIDTH - 1) - 1),'from',@(x) x/(2^(self.DAC_WIDTH - 1) - 1));
+                    .setFunctions('to',@(x) x/self.CONV_DAC,'from',@(x) x*self.CONV_DAC);
             end
             %
             % Number of samples for reading raw ADC data
@@ -169,15 +174,17 @@ classdef PowerServoControl < handle
             self.pids = PowerServoPID.empty;
             for nn = 1:self.NUM_PID
                 self.pids(nn,1) = PowerServoPID(self,self.pidControlRegs(nn),self.pidGainRegs(nn));
-                self.output_switch = DeviceParameter([2,2] + (nn - 1),self.topReg).setLimits('lower',0,'upper',1);
+                self.output_switch(nn,1) = DeviceParameter([8,9] + 2*(nn - 1),self.topReg).setLimits('lower',0,'upper',3)...
+                    .setFunctions('to',@(x) self.convert_pid_table(x),'from',@(x) self.convert_pid_table(x));
             end
             %
             % FIFO routing
             %
             self.fifo_route = DeviceParameter.empty;
             for nn = 1:self.NUM_MEAS
-                self.fifo_route(nn) = DeviceParameter((nn - 1) + [0,0],self.topReg,'uint32')...
-                    .setLimits('lower',0,'upper',1);
+                self.fifo_route(nn) = DeviceParameter((nn - 1)*4 + [0,3],self.topReg,'uint32')...
+                    .setLimits('lower',0,'upper',5)...
+                    .setFunctions('to',@(x) self.convert_fifo_table(x),'from',@(x) self.convert_fifo_table(x));
             end
         end
         
@@ -187,9 +194,10 @@ classdef PowerServoControl < handle
             %   SELF = SETDEFAULTS(SELF) sets default values for SELF
             self.pwm.set([0,0]);
             self.log2_rate.set(13);
-            self.cic_shift.set(-3);
+            self.cic_shift.set(0);
             self.numSamples.set(4000);
-            self.output_switch.set([0,0]);
+            self.output_switch(1).set('AO0');
+            self.output_switch(2).set('AO1');
             self.dac.set([0,0]);
             self.pwm_lower_limits.set([0,0]);
             self.pwm_upper_limits.set([0.25,0.25]);
@@ -197,7 +205,7 @@ classdef PowerServoControl < handle
             self.dac_upper_limits.set([0.25,0.25]);
             self.pids.setDefaults;
             for nn = 1:numel(self.fifo_route)
-                self.fifo_route(nn).set(0);
+                self.fifo_route(nn).set(sprintf('IN%d',nn));
             end
 
             self.auto_retry = true;
@@ -334,7 +342,7 @@ classdef PowerServoControl < handle
             elseif strcmpi(self.jumpers,'lv')
                 c = self.CONV_ADC_LV;
             end
-            r = x*c;
+            r = x*c*2^(self.cic_shift.value);
         end
         
         function r = convert2int(self,x)
@@ -343,7 +351,7 @@ classdef PowerServoControl < handle
             elseif strcmpi(self.jumpers,'lv')
                 c = self.CONV_ADC_LV;
             end
-            r = x/c;
+            r = x/c/2^(self.cic_shift.value);
         end
 
 
@@ -383,8 +391,66 @@ classdef PowerServoControl < handle
             end
 
             for nn = 1:self.NUM_MEAS
-                if self.fifo_route(nn).value
+                if strfind(self.fifo_route(nn).value,'IN')
                     self.data(:,nn) = self.convert2volts(self.data(:,nn));
+                elseif strfind(self.fifo_route(nn).value,'OUT')
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
+                else
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
+                end
+            end
+        end
+
+        function self = getVoltageStepResponse(self,numSamples,actuator,bias_voltage,jump_voltage)
+            %
+            switch lower(actuator)
+                case 'out1'
+                    p = self.dac(1);
+                case 'out2'
+                    p = self.dac(2);
+                case 'ao0'
+                    p = self.pwm(1);
+                case 'ao1'
+                    p = self.pwm(2);
+                otherwise
+                    error('Only actuator values allowed are ''out1'', ''out2'', ''ao0'', and ''ao1''!');
+            end
+            addr = p.regs.addr;
+            bias = p.toInteger(bias_voltage);
+            jump = p.toInteger(jump_voltage);
+
+            numSamples = round(numSamples);
+
+            write_arg = {'./analyze_jump_response','-n',sprintf('%d',numSamples),'-j',sprintf('%d',round(jump)),...
+                            '-i',sprintf('%d',round(addr)),'-b',sprintf('%d',round(bias)),'-s',sprintf('%d',self.NUM_MEAS)};
+            if self.auto_retry
+                for jj = 1:10
+                    try
+                        self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
+                        raw = typecast(self.conn.recvMessage,'uint8');
+                        d = self.convertData(raw);
+                        self.data = d;
+                        self.t = self.dt()*(0:(numSamples-1));
+                        break;
+                    catch e
+                        if jj == 10
+                            rethrow(e);
+                        end
+                    end
+                end
+            else
+                self.conn.write(0,'mode','command','cmd',write_arg,'return_mode','file');
+                raw = typecast(self.conn.recvMessage,'uint8');
+                d = self.convertData(raw);
+                self.data = d;
+                self.t = self.dt()*(0:(numSamples-1));
+            end
+
+            for nn = 1:self.NUM_MEAS
+                if strfind(self.fifo_route(nn).value,'IN')
+                    self.data(:,nn) = self.convert2volts(self.data(:,nn));
+                elseif strfind(self.fifo_route(nn).value,'OUT')
+                    self.data(:,nn) = self.data(:,nn)*self.CONV_DAC;
                 else
                     self.data(:,nn) = self.data(:,nn)*self.CONV_PWM;
                 end
@@ -444,10 +510,10 @@ classdef PowerServoControl < handle
             end
             
             for nn = 1:numel(self.fifo_route)
-                self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%d');
+                self.fifo_route(nn).print(sprintf('FIFO Route %d',nn),strwidth,'%s');
             end
             for nn = 1:numel(self.output_switch)
-                self.output_switch(nn).print(sprintf('Output switch %d',nn),strwidth,'%d');
+                self.output_switch(nn).print(sprintf('Output switch %d',nn),strwidth,'%s');
             end
             for nn = 1:self.NUM_PID
                 fprintf(1,'\t ----------------------------------\n');
@@ -557,6 +623,33 @@ classdef PowerServoControl < handle
             v = double(d)*c;
         end
 
+        function r = convert_fifo_table(x)
+            if ischar(x) || isstring(x)
+                r = find(strcmpi(x,PowerServoControl.FIFO_ROUTE_OPTIONS)) - 1;
+            elseif isnumeric(x)
+                r = PowerServoControl.FIFO_ROUTE_OPTIONS{x + 1};
+            end
+        end
+
+        function r = convert_pid_table(x)
+            if ischar(x) || isstring(x)
+                r = find(strcmpi(x,PowerServoControl.PID_OUTPUT_OPTIONS)) - 1;
+            elseif isnumeric(x)
+                r = PowerServoControl.PID_OUTPUT_OPTIONS{x + 1};
+            end
+        end
+
+        function app = get_running_app_instance
+            h = findall(groot,'type','figure');
+            for nn = 1:numel(h)
+                if strcmpi(h(nn).Name,'Power Servo Control')
+                    app = h(nn).RunningAppInstance;
+                    break;
+                end
+            end
+        end
+
     end
     
 end
+

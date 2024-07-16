@@ -31,10 +31,8 @@ int stop_fifo(void *cfg) {
   return 0;
 }
 
-int write_to_pwm(void *cfg,uint16_t V1,uint16_t V2) {
-  *((uint32_t *)(cfg + PWM_LOC)) = (uint32_t) V1;
-  *((uint32_t *)(cfg + PWM_LOC + 4)) = (uint32_t) V2;
-//   *((uint32_t *)(cfg + PWM_LOC + 8)) = (uint32_t) V3;
+int write_voltage(void *cfg,uint32_t reg,uint16_t V) {
+  *((uint32_t *)(cfg + reg)) = (uint32_t) V;
   return 0;
 }
  
@@ -44,11 +42,9 @@ int main(int argc, char **argv)
   int num_samples;      //Number of samples to acquire
   void *cfg;		    //A pointer to a memory location.  The * indicates that it is a pointer - it points to a location in memory
   char *name = "/dev/mem";	//Name of the memory resource
-  uint16_t Vx = 320;
-  uint16_t Vy = 320;
-//   uint16_t Vz = 320;
+  uint32_t jump_register = 0x00000200;
+  uint16_t Vbias = 0;
   uint16_t Vjump = 64;
-  uint8_t jump_index = 0;
 
   uint32_t i, incr = 0;
   uint8_t saveType = 2;
@@ -65,7 +61,7 @@ int main(int argc, char **argv)
    * Parse the input arguments
    */
   int c;
-  while ((c = getopt(argc,argv,"s:j:n:x:y:i:f")) != -1) {
+  while ((c = getopt(argc,argv,"s:j:n:b:i:f")) != -1) {
     switch (c) {
         case 's':
             saveFactor = atoi(optarg);
@@ -74,16 +70,13 @@ int main(int argc, char **argv)
             Vjump = atoi(optarg);
             break;
         case 'i':
-            jump_index = atoi(optarg);
+            jump_register = atoi(optarg);
             break;
         case 'n':
             num_samples = atoi(optarg);
             break;
-        case 'x':
-            Vx = atoi(optarg);
-            break;
-        case 'y':
-            Vy = atoi(optarg);
+        case 'b':
+            Vbias = atoi(optarg);
             break;
         case 'f':
             debugFlag = 1;
@@ -122,31 +115,21 @@ int main(int argc, char **argv)
   cfg = mmap(0,MAP_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED,fd,MEM_LOC);
  
   // Set voltages
-  write_to_pwm(cfg,Vx,Vy);
+  write_voltage(cfg,jump_register,Vbias);
   sleep(1);
   // Record data
   start_fifo(cfg);
   for (i = 0;i < data_size;i += saveFactor) {
     if ((i >= (data_size >> 2)) & (allow_jump == 1)) {
         allow_jump = 0;
-        switch (jump_index) {
-            case 1:
-                write_to_pwm(cfg,Vx + Vjump,Vy);
-                break;
-            case 2:
-                write_to_pwm(cfg,Vx,Vy + Vjump);
-                break;
-            default:
-                break;
-        }
-        
+        write_voltage(cfg,jump_register,Vbias + Vjump);    
     }
     for (incr = 0;incr < saveFactor;incr++) {
         *(data + i + incr) = *((uint32_t *)(cfg + DATA_LOC + (incr << 2)));
     }
   }
   stop_fifo(cfg);
-  write_to_pwm(cfg,Vx,Vy);
+  write_voltage(cfg,jump_register,Vbias);
 
   ptr = fopen("SavedData.bin","wb");
   fwrite(data,4,(size_t)(data_size),ptr);
